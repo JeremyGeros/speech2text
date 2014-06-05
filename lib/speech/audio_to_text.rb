@@ -5,13 +5,14 @@ module Speech
     attr_accessor :file, :rate, :captured_json
     attr_accessor :best_match_text, :score, :verbose, :segments
 
-    def initialize(file, options={})
+    def initialize(file, key, options={})
       self.verbose = false
       self.file = file
       self.captured_json = {}
       self.best_match_text = ""
       self.score = 0.0
       self.segments = 0
+      self.key = key
 
       self.verbose = !!options[:verbose] if options.key?(:verbose)
     end
@@ -26,7 +27,8 @@ module Speech
       self.score = 0.0
       self.segments = 0
 
-      url = "https://www.google.com/speech-api/v1/recognize?xjerr=1&client=speech2text&lang=#{lang}&maxresults=#{max}"
+      url = "https://www.google.com/speech-api/v2/recognize?client=chromium&lang=#{lang}&maxresults=#{max}&key=#{self.key}"
+      # url = "https://www.google.com/speech-api/v1/recognize?xjerr=1&client=speech2text&lang=#{lang}&maxresults=#{max}"
       splitter = Speech::AudioSplitter.new(file) # based off the wave file because flac doesn't tell us the duration
       easy = Curl::Easy.new(url)
       splitter.split.each do|chunk|
@@ -46,7 +48,7 @@ module Speech
       while retrying && retry_count < 3 # 3 retries
         easy.verbose = self.verbose
         easy.headers['Content-Type'] = "audio/x-flac; rate=#{chunk.flac_rate}"
-        easy.headers['User-Agent'] = "https://github.com/taf2/speech2text"
+        easy.headers['User-Agent'] = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6_8) AppleWebKit/535.7 (KHTML, like Gecko) Chrome/16.0.912.77 Safari/535.7"
         easy.post_body = "Content=#{chunk.to_flac_bytes}"
         if self.verbose
           easy.on_progress {|dl_total, dl_now, ul_total, ul_now| printf("%.2f/%.2f\r", ul_now, ul_total); true }
@@ -59,16 +61,16 @@ module Speech
           sleep 0.5 # wait longer on error?, google??
         else
           # {"status":0,"id":"ce178ea89f8b17d8e8298c9c7814700a-1","hypotheses":[{"utterance"=>"I like pickles", "confidence"=>0.59408695}, {"utterance"=>"I like turtles"}, {"utterance"=>"I like tickles"}, {"utterance"=>"I like to Kohl's"}, {"utterance"=>"I Like tickles"}, {"utterance"=>"I lyk tickles"}, {"utterance"=>"I liked to Kohl's"}]}
-          data = JSON.parse(easy.body_str)
-          self.captured_json['status'] = data['status']
-          self.captured_json['id'] = data['id']
-          self.captured_json['hypotheses'] = data['hypotheses'].map {|ut| [ut['utterance'], ut['confidence']] } 
-          if data.key?('hypotheses') && data['hypotheses'].first
-            self.best_match_text += " " + data['hypotheses'].first['utterance']
-            self.score += data['hypotheses'].first['confidence']
-            self.segments += 1
-            puts data['hypotheses'].first['utterance']
-          end
+          data = JSON.parse(easy.body_str.gsub('{"result":[]}', ''))
+          # self.captured_json['status'] = data['status']
+          # self.captured_json['id'] = data['id']
+          self.captured_json['result'] = data['result'][0]['alternative']
+          # if data.key?('hypotheses') && data['hypotheses'].first
+          #   self.best_match_text += " " + data['hypotheses'].first['utterance']
+          #   self.score += data['hypotheses'].first['confidence']
+          #   self.segments += 1
+          #   puts data['hypotheses'].first['utterance']
+          # end
           retrying = false
         end
         sleep 0.1 # not too fast there tiger
