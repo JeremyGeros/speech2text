@@ -3,7 +3,7 @@ module Speech
 
   class AudioToText
     attr_accessor :file, :rate, :captured_json
-    attr_accessor :best_match_text, :score, :verbose, :segments
+    attr_accessor :best_match_text, :score, :verbose, :segments, :key
 
     def initialize(file, key, options={})
       self.verbose = false
